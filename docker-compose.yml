@@ -25,13 +25,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Local test target — remove before deploying to NAS
-  test-server:
-    image: alpine
-    container_name: test-server
-    command: sleep infinity
-    networks: [bot-internal]
-
 networks:
   bot-internal:
     driver: bridge

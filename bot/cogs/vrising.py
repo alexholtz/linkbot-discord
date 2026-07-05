@@ -156,7 +156,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         channel = await self._notification_channel()
         if channel:
-            await channel.send("Fetch time's up — server stopped.")
+            await channel.send("I'm tired (auto-shutdown) — server stopped.")
 
     async def _notification_channel(
         self,
