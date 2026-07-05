@@ -1,20 +1,16 @@
+name: linkbot-discord
+
 services:
   docker-proxy:
-    image: tecnativa/docker-socket-proxy
+    image: haproxy:lts-alpine
+    user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      CONTAINERS: 1    # GET /containers/* (status checks, inspect)
-      POST: 1          # master switch: required for any POST operation
-      ALLOW_START: 1   # POST /containers/{id}/start
-      ALLOW_STOP: 1    # POST /containers/{id}/stop
-      # Note: POST=1 + CONTAINERS=1 also permits POST /containers/create.
-      # Blast radius is bounded: IMAGES=0 blocks pulling new images, and the
-      # proxy port is unreachable outside the bot-internal network.
+      - ./docker-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     networks: [bot-internal]
     restart: unless-stopped
 
-  discord-bot:
+  bot:
     build: ./bot
     env_file: .env
     environment:
@@ -27,6 +23,13 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  test-server:
+    image: alpine
+    container_name: vrising11
+    profiles: [test]
+    command: sleep infinity
+    networks: [bot-internal]
 
 networks:
   bot-internal:

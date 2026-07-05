@@ -14,7 +14,7 @@ a user manually stops the server first. Reusing an existing bot application (Lin
 ## Project Structure
 
 ```
-discord-bot/
+linkbot-discord/
 ├── docker-compose.yml          # bot stack: proxy + bot
 ├── .env.example                # template for all env vars
 ├── .gitignore                  # excludes .env, __pycache__, .venv, etc.
@@ -84,7 +84,7 @@ services:
     networks: [bot-internal]
     restart: unless-stopped
 
-  discord-bot:
+  bot:
     build: ./bot
     env_file: .env
     environment:
@@ -202,7 +202,7 @@ async def _auto_shutdown(self, hours: int):
 
 ### `sync_commands.py` (run once after deploy, or after command changes)
 ```bash
-docker compose run --rm discord-bot python sync_commands.py
+docker compose run --rm bot python sync_commands.py
 ```
 1. Logs in with bot token
 2. Clears all **global** commands (`tree.clear_commands(guild=None); await tree.sync()`)
@@ -227,14 +227,14 @@ bot architecture — slots into the existing coroutine.
 ```bash
 # One-time setup
 ssh you@nas
-git clone <your-repo> ~/docker/discord-bot
-cd ~/docker/discord-bot
+git clone <your-repo> ~/docker/linkbot-discord
+cd ~/docker/linkbot-discord
 cp .env.example .env
 nano .env                                         # fill in token, guild ID, etc.
 docker compose up -d --build                      # builds image on NAS, starts stack
 
 # Register slash commands (once, or after command changes)
-docker compose run --rm discord-bot python sync_commands.py
+docker compose run --rm bot python sync_commands.py
 
 # Future updates
 git pull && docker compose up -d --build
@@ -264,16 +264,32 @@ No Docker Hub account or image registry needed. Docker builds the image locally 
 ## Verification
 
 **Proxy security:**
+
+The bot image (python:3.14-slim) has no curl. Use a throwaway alpine/curl container on the same network:
+
 ```bash
-# From inside bot container — should succeed
-docker exec discord-bot curl http://docker-proxy:2375/containers/json
-# From inside bot container — should 403
-docker exec discord-bot curl -X POST http://docker-proxy:2375/images/create
-# From host — should fail (port not published)
+# Inspect a container by name — expect 200
+docker run --rm --network linkbot-discord_bot-internal alpine/curl \
+  -s -o /dev/null -w "%{http_code}" \
+  http://docker-proxy:2375/v1.55/containers/vrising11/json
+
+# POST /containers/create — expect 403
+docker run --rm --network linkbot-discord_bot-internal alpine/curl \
+  -s -o /dev/null -w "%{http_code}" \
+  -X POST http://docker-proxy:2375/v1.55/containers/create \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Any unrelated endpoint (images) — expect 403
+docker run --rm --network linkbot-discord_bot-internal alpine/curl \
+  -s -o /dev/null -w "%{http_code}" \
+  http://docker-proxy:2375/v1.55/images/json
+
+# From host — expect connection refused (port not published)
 curl http://localhost:2375/containers/json
 ```
 
 **Bot behavior:**
+
 - `/vrising status` → correct state (running or stopped)
 - `/vrising start` → server starts, bot confirms with shutdown time
 - `/vrising start` again (server already running) → timer rescheduled, no restart of container

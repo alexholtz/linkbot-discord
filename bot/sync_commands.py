@@ -2,7 +2,7 @@
 One-shot script to register slash commands with Discord.
 
 Run after first deploy and whenever commands change:
-    docker compose run --rm discord-bot python sync_commands.py
+    docker compose run --rm bot python sync_commands.py
 
 This will:
   - Clear all global commands (removes any old /satisfactory commands)
