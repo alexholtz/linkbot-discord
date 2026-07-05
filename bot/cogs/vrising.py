@@ -87,7 +87,13 @@ class VRising(commands.GroupCog, name="vrising"):
         if self._wrong_guild(interaction):
             return
 
-        status = await asyncio.to_thread(docker_client.container_status)
+        try:
+            status = await asyncio.to_thread(docker_client.container_status)
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Could not reach Docker proxy: {e}", ephemeral=True
+            )
+            return
 
         if status == "running":
             if self._shutdown_at:
