@@ -1,5 +1,4 @@
-FROM python:3.13-slim
-# Bump to python:3.14-slim when 3.14 ships (expected Oct 2025)
+FROM python:3.14-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 

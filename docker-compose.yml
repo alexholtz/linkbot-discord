@@ -4,9 +4,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      CONTAINERS: 1
-      START: 1
-      STOP: 1
+      CONTAINERS: 1    # GET /containers/* (status checks, inspect)
+      POST: 1          # master switch: required for any POST operation
+      ALLOW_START: 1   # POST /containers/{id}/start
+      ALLOW_STOP: 1    # POST /containers/{id}/stop
     networks: [bot-internal]
     restart: unless-stopped
 
@@ -23,6 +24,13 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Local test target — remove before deploying to NAS
+  test-server:
+    image: alpine
+    container_name: test-server
+    command: sleep infinity
+    networks: [bot-internal]
 
 networks:
   bot-internal:

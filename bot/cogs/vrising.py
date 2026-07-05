@@ -23,7 +23,7 @@ class VRising(commands.GroupCog, name="vrising"):
     def _wrong_guild(self, interaction: discord.Interaction) -> bool:
         return interaction.guild_id != config.DISCORD_GUILD_ID
 
-    @app_commands.command(name="start", description="Start the vRising server")
+    @app_commands.command(name="start", description="Start the V Rising server")
     @app_commands.describe(hours="Hours until auto-shutdown (default from config)")
     async def start(
         self, interaction: discord.Interaction, hours: int | None = None
@@ -61,13 +61,13 @@ class VRising(commands.GroupCog, name="vrising"):
 
         shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
         if already_running:
-            msg = f"Server was already running. Auto-shutdown reset to **{hours}h** (at {shutdown_ts})."
+            msg = f"Fetch was already going — reset the timer to **{hours}h** (at {shutdown_ts})."
         else:
-            msg = f"Server started. Auto-shutdown in **{hours}h** (at {shutdown_ts})."
+            msg = f"Let's play fetch! Server starting up. Auto-shutdown in **{hours}h** (at {shutdown_ts})."
 
         await interaction.followup.send(msg)
 
-    @app_commands.command(name="stop", description="Stop the vRising server")
+    @app_commands.command(name="stop", description="Stop the V Rising server")
     async def stop(self, interaction: discord.Interaction) -> None:
         if self._wrong_guild(interaction):
             return
@@ -78,11 +78,11 @@ class VRising(commands.GroupCog, name="vrising"):
 
         try:
             await asyncio.to_thread(docker_client.stop_container)
-            await interaction.followup.send("Server stopped.")
+            await interaction.followup.send("Playtime is over. Server stopped.")
         except Exception as e:
             await interaction.followup.send(f"Failed to stop server: {e}")
 
-    @app_commands.command(name="status", description="Check the vRising server status")
+    @app_commands.command(name="status", description="Check the V Rising server status")
     async def status(self, interaction: discord.Interaction) -> None:
         if self._wrong_guild(interaction):
             return
@@ -100,7 +100,7 @@ class VRising(commands.GroupCog, name="vrising"):
             else:
                 msg = "Server is **running**. No auto-shutdown scheduled."
         else:
-            msg = f"Server is **{status}**."
+            msg = "Server is **offline**."
 
         await interaction.response.send_message(msg)
 
@@ -112,7 +112,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         hours = config.DEFAULT_SHUTDOWN_HOURS
         log.warning(
-            "vRising container found running at startup — scheduling %dh auto-shutdown", hours
+            "V Rising container found running at startup — scheduling %dh auto-shutdown", hours
         )
         self._reschedule(hours)
 
@@ -120,8 +120,8 @@ class VRising(commands.GroupCog, name="vrising"):
         if channel:
             shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
             await channel.send(
-                f"Bot restarted — vRising server found running. "
-                f"Auto-shutdown scheduled in **{hours}h** (at {shutdown_ts})."
+                f"Woke up from a nap (restarted) — V Rising was already running! "
+                f"Auto-shutdown in **{hours}h** (at {shutdown_ts})."
             )
 
     # ------------------------------------------------------------------ #
@@ -145,7 +145,7 @@ class VRising(commands.GroupCog, name="vrising"):
         except asyncio.CancelledError:
             return
 
-        log.info("Auto-shutdown timer fired — stopping vRising container")
+        log.info("Auto-shutdown timer fired — stopping V Rising container")
         try:
             await asyncio.to_thread(docker_client.stop_container)
         except Exception as e:
@@ -156,7 +156,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         channel = await self._notification_channel()
         if channel:
-            await channel.send("vRising server auto-shutdown complete.")
+            await channel.send("Fetch time's up — server stopped.")
 
     async def _notification_channel(
         self,
