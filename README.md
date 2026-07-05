@@ -54,6 +54,22 @@ docker compose run --rm bot python sync_commands.py
 git pull && docker compose up -d --build
 ```
 
+## Useful Compose Commands
+
+```bash
+# Stop containers (keeps them, can be restarted quickly)
+docker compose stop
+
+# Stop and remove containers + networks (clean slate)
+docker compose down
+
+# View live logs
+docker compose logs -f
+
+# Restart a single service after a code change
+docker compose restart bot
+```
+
 ## Local Development
 
 A test container (fake vRising target) is available via the `test` profile:
