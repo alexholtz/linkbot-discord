@@ -70,6 +70,16 @@ DOCKER_PROXY_URL=http://docker-proxy:2375
 
 ## `docker-compose.yml` (bot stack)
 
+The proxy was initially implemented using `tecnativa/docker-socket-proxy` (a haproxy wrapper
+with env-var-driven ACLs). It was replaced with `haproxy:lts-alpine` + a custom config after
+a security review identified that `POST=1` combined with `CONTAINERS=1` — both required for
+the bot to function — also permitted `POST /containers/create`. A compromised bot could use
+this to create a new container with host volume mounts, exposing the NAS filesystem.
+tecnativa provides no env var to block just that endpoint.
+
+The custom config is ~15 lines and covers exactly the four paths docker-py uses. Everything
+else, including `/containers/create`, is denied by default. See `docker-proxy/haproxy.cfg`.
+
 ```yaml
 services:
   docker-proxy:
