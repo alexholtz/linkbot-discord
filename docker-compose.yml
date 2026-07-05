@@ -8,6 +8,9 @@ services:
       POST: 1          # master switch: required for any POST operation
       ALLOW_START: 1   # POST /containers/{id}/start
       ALLOW_STOP: 1    # POST /containers/{id}/stop
+      # Note: POST=1 + CONTAINERS=1 also permits POST /containers/create.
+      # Blast radius is bounded: IMAGES=0 blocks pulling new images, and the
+      # proxy port is unreachable outside the bot-internal network.
     networks: [bot-internal]
     restart: unless-stopped
 

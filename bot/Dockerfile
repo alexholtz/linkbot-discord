@@ -10,5 +10,9 @@ RUN uv sync --frozen --no-dev
 
 COPY . .
 
+RUN useradd --create-home --no-log-init appuser \
+    && chown -R appuser /app
+USER appuser
+
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["python", "main.py"]
