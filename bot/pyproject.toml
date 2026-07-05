@@ -1,0 +1,9 @@
+[project]
+name = "vrising-discord-bot"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "discord.py>=2.3.2",
+    "docker>=7.1",
+    "python-dotenv>=1.0",
+]

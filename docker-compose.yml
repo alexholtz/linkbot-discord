@@ -1,0 +1,29 @@
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+      START: 1
+      STOP: 1
+    networks: [bot-internal]
+    restart: unless-stopped
+
+  discord-bot:
+    build: ./bot
+    env_file: .env
+    environment:
+      DOCKER_PROXY_URL: http://docker-proxy:2375
+    networks: [bot-internal]
+    depends_on: [docker-proxy]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bot-internal:
+    driver: bridge
