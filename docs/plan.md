@@ -223,6 +223,55 @@ docker compose run --rm bot python sync_commands.py
 
 ---
 
+## Multi-Server Support (future)
+
+Support multiple game server containers, each mapped to its own slash command group
+(e.g. `/vrising`, `/satisfactory`), driven by a config file rather than hardcoded class
+definitions.
+
+### Config
+
+A committed `servers.yml` (no secrets — container names are not sensitive):
+
+```yaml
+servers:
+  - command: vrising
+    container: vrising11
+  - command: satisfactory
+    container: satisfactory1
+```
+
+`TARGET_CONTAINER_NAME` in `.env` goes away; all server mappings live in `servers.yml`.
+
+### discord.py approach
+
+The current `VRising(commands.GroupCog, name="vrising")` pattern bakes the slash command
+group name into the class definition at write time — you can't set `name=` from a variable.
+
+For dynamic names from config, use `app_commands.Group` directly (the lower-level primitive
+that `GroupCog` wraps). Groups are instantiated at runtime with whatever name the config
+provides, then registered on the bot's command tree:
+
+```python
+group = app_commands.Group(name="satisfactory", description="...")
+bot.tree.add_command(group)
+```
+
+`app_commands.Group` is a fully supported first-class discord.py pattern — `GroupCog` is
+just an ergonomic shortcut for the static case.
+
+### Refactor scope
+
+- Generalize `VRising` cog → `ServerCog`, taking `command_name` + `container_name` as
+  constructor params. Strip vRising-specific flavor text (or make it configurable per entry).
+- `main.py` reads `servers.yml` and registers one `ServerCog` per entry.
+- `sync_commands.py` loads the same cogs — picks up all groups automatically, no changes
+  needed.
+- If haproxy name-filtering is desired (see haproxy notes), the allowed container name list
+  can be generated from `servers.yml` at proxy startup.
+
+---
+
 ## RCON (v2 — not in this build)
 
 vRising supports RCON (port 25575). Future extension: add warning messages inside
