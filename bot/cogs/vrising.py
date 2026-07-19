@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import urllib.request
 from datetime import datetime, timezone, timedelta
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+from aiomcrcon import Client as RconClient
 
 import config
 import docker_client
@@ -96,15 +98,18 @@ class VRising(commands.GroupCog, name="vrising"):
             return
 
         if status == "running":
+            connected = await asyncio.to_thread(self._get_connected_users)
+            player_str = f" | **{connected}** player(s) online" if connected is not None else ""
+
             if self._shutdown_at:
                 remaining = self._shutdown_at - datetime.now(timezone.utc)
                 total_secs = max(int(remaining.total_seconds()), 0)
                 h, rem = divmod(total_secs, 3600)
                 m = rem // 60
                 shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-                msg = f"Server is **running**. Auto-shutdown in {h}h {m}m (at {shutdown_ts})."
+                msg = f"Server is **running**{player_str}. Auto-shutdown in {h}h {m}m (at {shutdown_ts})."
             else:
-                msg = "Server is **running**. No auto-shutdown scheduled."
+                msg = f"Server is **running**{player_str}. No auto-shutdown scheduled."
         else:
             msg = "Server is **offline**."
 
@@ -147,7 +152,44 @@ class VRising(commands.GroupCog, name="vrising"):
 
     async def _auto_shutdown(self, hours: int) -> None:
         try:
-            await asyncio.sleep(hours * 3600)
+            while True:
+                await asyncio.sleep(hours * 3600)
+
+                if not config.VRISING_METRICS_URL:
+                    break  # metrics not configured — shut down as scheduled
+
+                connected = await asyncio.to_thread(self._get_connected_users)
+
+                if connected is None:
+                    # Metrics reachable but fetch failed — extend to avoid surprise shutdown
+                    log.warning("Metrics unavailable at shutdown check — extending 1h")
+                    hours = 1
+                    self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
+                    await self._rcon_announce(
+                        "Server auto-shutdown postponed — couldn't verify player count. Checking again in 1h."
+                    )
+                    channel = await self._notification_channel()
+                    if channel:
+                        shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
+                        await channel.send(
+                            f"⚠️ Couldn't reach server metrics at shutdown time — extended **1h** to be safe (next check at {shutdown_ts})."
+                        )
+                elif connected > 0:
+                    log.info("Auto-shutdown check: %d player(s) online — extending 1h", connected)
+                    hours = 1
+                    self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
+                    await self._rcon_announce(
+                        f"Server auto-shutdown postponed — {connected} player(s) still online. Checking again in 1h."
+                    )
+                    channel = await self._notification_channel()
+                    if channel:
+                        shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
+                        await channel.send(
+                            f"**{connected}** player(s) still online at shutdown time — extended **1h** (next check at {shutdown_ts})."
+                        )
+                else:
+                    break  # 0 players — proceed to shutdown
+
         except asyncio.CancelledError:
             return
 
@@ -163,6 +205,28 @@ class VRising(commands.GroupCog, name="vrising"):
         channel = await self._notification_channel()
         if channel:
             await channel.send("I'm tired (auto-shutdown) — server stopped.")
+
+    def _get_connected_users(self) -> int | None:
+        """Fetch vr_users_connected from the metrics API. Returns None on failure."""
+        try:
+            with urllib.request.urlopen(config.VRISING_METRICS_URL, timeout=5) as resp:
+                for line in resp.read().decode().splitlines():
+                    if line.startswith("vr_users_connected "):
+                        return int(float(line.split()[1]))
+            log.warning("vr_users_connected not found in metrics response")
+        except Exception as e:
+            log.warning("Failed to fetch metrics: %s", e)
+        return None
+
+    async def _rcon_announce(self, message: str) -> None:
+        """Send an RCON announce to all connected players. Logs and swallows errors."""
+        if not (config.RCON_HOST and config.RCON_PASSWORD):
+            return
+        try:
+            async with RconClient(config.RCON_HOST, config.RCON_PORT, config.RCON_PASSWORD) as rcon:
+                await rcon.send_cmd(f"announce {message}")
+        except Exception as e:
+            log.warning("RCON announce failed: %s", e)
 
     async def _notification_channel(
         self,
