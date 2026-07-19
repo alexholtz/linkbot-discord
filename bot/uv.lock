@@ -3,6 +3,15 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
+name = "aio-mc-rcon"
+version = "3.4.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/ff/9d2925b11292055a5c746157e9aa2eecd0909824ced7ae8dd92f3174b354/aio_mc_rcon-3.4.2.tar.gz", hash = "sha256:e8e6d653025b64ac15b90a00ba84f60f5d9aef149f8241e056c4a81008a10bf3", size = 3769, upload-time = "2026-01-12T16:54:11.56Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/a1/29316f2eb5b5a8482fd0ab93a63f24ca1215350210f4a0fc6f01322360d8/aio_mc_rcon-3.4.2-py3-none-any.whl", hash = "sha256:2e596ea4c79e58f16c59519d272286e7557d69da65607e4142035c5e868da2fe", size = 4866, upload-time = "2026-01-12T16:54:10.263Z" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -556,6 +565,7 @@ name = "vrising-discord-bot"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aio-mc-rcon" },
     { name = "discord-py" },
     { name = "docker" },
     { name = "python-dotenv" },
@@ -563,6 +573,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aio-mc-rcon", specifier = ">=3.2" },
     { name = "discord-py", specifier = ">=2.3.2" },
     { name = "docker", specifier = ">=7.1" },
     { name = "python-dotenv", specifier = ">=1.0" },
