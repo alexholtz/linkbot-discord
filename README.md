@@ -16,7 +16,7 @@ The bot never touches the Docker socket directly.
 | Command | Description |
 |---|---|
 | `/vrising start [hours]` | Start the server; arms auto-shutdown timer (default: `DEFAULT_SHUTDOWN_HOURS`) |
-| `/vrising stop` | Stop the server and cancel the timer |
+| `/vrising stop [force]` | Stop the server and cancel the timer; aborts if players are online unless `force` is passed |
 | `/vrising status` | Show server state and time remaining until auto-shutdown |
 
 If the server is already running when `/vrising start` is called, the timer is rescheduled
@@ -47,8 +47,8 @@ cp .env.example .env
 nano .env
 docker compose up -d --build
 
-# Register slash commands (once, or after command changes)
-docker compose run --rm bot python sync_commands.py
+# Register slash commands (once, or after command signatures change)
+docker exec linkbot-discord-bot-1 python sync_commands.py
 
 # Updates
 git pull && docker compose up -d --build
