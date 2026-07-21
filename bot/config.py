@@ -29,7 +29,7 @@ DOCKER_PROXY_URL = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
 DEFAULT_SHUTDOWN_HOURS = int(os.getenv("DEFAULT_SHUTDOWN_HOURS", "6"))
 MAX_SHUTDOWN_HOURS = int(os.getenv("MAX_SHUTDOWN_HOURS", "24"))
 
-# Optional — if unset, player-count display and RCON announces are skipped gracefully
+# Optional -- if unset, player-count display and RCON announces are skipped gracefully
 VRISING_METRICS_URL: str | None = os.getenv("VRISING_METRICS_URL")
 RCON_HOST: str | None = os.getenv("RCON_HOST")
 RCON_PORT: int = int(os.getenv("RCON_PORT", "25575"))

@@ -63,7 +63,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
         if already_running:
-            msg = f"Fetch was already going — reset the timer to **{hours}h** (at {shutdown_ts})."
+            msg = f"Fetch was already going -- reset the timer to **{hours}h** (at {shutdown_ts})."
         else:
             msg = f"Let's play fetch! Server starting up. Auto-shutdown in **{hours}h** (at {shutdown_ts})."
 
@@ -123,7 +123,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         hours = config.DEFAULT_SHUTDOWN_HOURS
         log.warning(
-            "V Rising container found running at startup — scheduling %dh auto-shutdown", hours
+            "V Rising container found running at startup -- scheduling %dh auto-shutdown", hours
         )
         self._reschedule(hours)
 
@@ -131,7 +131,7 @@ class VRising(commands.GroupCog, name="vrising"):
         if channel:
             shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
             await channel.send(
-                f"Woke up from a nap (restarted) — V Rising was already running! "
+                f"Woke up from a nap (restarted) -- V Rising was already running! "
                 f"Auto-shutdown in **{hours}h** (at {shutdown_ts})."
             )
 
@@ -156,44 +156,44 @@ class VRising(commands.GroupCog, name="vrising"):
                 await asyncio.sleep(hours * 3600)
 
                 if not config.VRISING_METRICS_URL:
-                    break  # metrics not configured — shut down as scheduled
+                    break  # metrics not configured -- shut down as scheduled
 
                 connected = await asyncio.to_thread(self._get_connected_users)
 
                 if connected is None:
-                    # Metrics reachable but fetch failed — extend to avoid surprise shutdown
-                    log.warning("Metrics unavailable at shutdown check — extending 1h")
+                    # Metrics reachable but fetch failed -- extend to avoid surprise shutdown
+                    log.warning("Metrics unavailable at shutdown check -- extending 1h")
                     hours = 1
                     self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
                     await self._rcon_announce(
-                        "Server auto-shutdown postponed — couldn't verify player count. Checking again in 1h."
+                        "Server auto-shutdown postponed -- couldn't verify player count. Checking again in 1h."
                     )
                     channel = await self._notification_channel()
                     if channel:
                         shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
                         await channel.send(
-                            f"⚠️ Couldn't reach server metrics at shutdown time — extended **1h** to be safe (next check at {shutdown_ts})."
+                            f"⚠️ Couldn't reach server metrics at shutdown time -- extended **1h** to be safe (next check at {shutdown_ts})."
                         )
                 elif connected > 0:
-                    log.info("Auto-shutdown check: %d player(s) online — extending 1h", connected)
+                    log.info("Auto-shutdown check: %d player(s) online -- extending 1h", connected)
                     hours = 1
                     self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
                     await self._rcon_announce(
-                        f"Server auto-shutdown postponed — {connected} player(s) still online. Checking again in 1h."
+                        f"Server auto-shutdown postponed -- {connected} player(s) still online. Checking again in 1h."
                     )
                     channel = await self._notification_channel()
                     if channel:
                         shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
                         await channel.send(
-                            f"**{connected}** player(s) still online at shutdown time — extended **1h** (next check at {shutdown_ts})."
+                            f"**{connected}** player(s) still online at shutdown time -- extended **1h** (next check at {shutdown_ts})."
                         )
                 else:
-                    break  # 0 players — proceed to shutdown
+                    break  # 0 players -- proceed to shutdown
 
         except asyncio.CancelledError:
             return
 
-        log.info("Auto-shutdown timer fired — stopping V Rising container")
+        log.info("Auto-shutdown timer fired -- stopping V Rising container")
         try:
             await asyncio.to_thread(docker_client.stop_container)
         except Exception as e:
@@ -204,7 +204,7 @@ class VRising(commands.GroupCog, name="vrising"):
 
         channel = await self._notification_channel()
         if channel:
-            await channel.send("I'm tired (auto-shutdown) — server stopped.")
+            await channel.send("I'm tired (auto-shutdown) -- server stopped.")
 
     def _get_connected_users(self) -> int | None:
         """Fetch vr_users_connected from the metrics API. Returns None on failure."""
