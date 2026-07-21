@@ -2,6 +2,7 @@ import asyncio
 import logging
 import urllib.request
 from datetime import datetime, timezone, timedelta
+from typing import Literal
 
 import discord
 from discord import app_commands
@@ -70,11 +71,23 @@ class VRising(commands.GroupCog, name="vrising"):
         await interaction.followup.send(msg)
 
     @app_commands.command(name="stop", description="Stop the V Rising server")
-    async def stop(self, interaction: discord.Interaction) -> None:
+    @app_commands.describe(force="Pass 'force' to stop even if players are online")
+    async def stop(
+        self, interaction: discord.Interaction, force: Literal["force"] | None = None
+    ) -> None:
         if self._wrong_guild(interaction):
             return
 
         await interaction.response.defer()
+
+        if force != "force" and config.VRISING_METRICS_URL:
+            connected = await asyncio.to_thread(self._get_connected_users)
+            if connected is not None and connected > 0:
+                await interaction.followup.send(
+                    f"Can't stop -- **{connected}** player(s) are online. "
+                    "Use `/vrising stop force:force` to stop anyway."
+                )
+                return
 
         self._cancel_shutdown()
 
