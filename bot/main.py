@@ -3,6 +3,7 @@ import logging
 
 import aiohttp
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 import config
@@ -48,6 +49,31 @@ async def on_ready() -> None:
     vrising_cog = bot.cogs.get("vrising")
     if vrising_cog:
         await vrising_cog.check_startup_state()
+
+
+@bot.tree.error
+async def on_app_command_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    """Ensure a slash command always gets a response, even on an unhandled error.
+
+    Without this, an exception raised after interaction.response.defer() leaves
+    the interaction stuck showing "thinking..." in Discord forever, since nothing
+    ever calls followup.send() to resolve it.
+    """
+    log.exception(
+        "Unhandled error in /%s",
+        interaction.command.qualified_name if interaction.command else "?",
+        exc_info=error,
+    )
+    message = "Something went wrong running that command."
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException:
+        pass
 
 
 async def main() -> None:
