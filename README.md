@@ -1,6 +1,6 @@
 # linkbot-discord
 
-Discord bot (LinkBot, named after a beloved companion) that controls a V Rising game server container on a Synology NAS via slash commands.
+Discord bot (LinkBot, named after a beloved companion) that controls game server containers (V Rising, Factorio) on a Synology NAS via slash commands.
 
 ## Architecture
 
@@ -13,15 +13,35 @@ The bot never touches the Docker socket directly.
 
 ## Commands
 
+Each enabled game gets the same command group (`/vrising`, `/factorio`):
+
 | Command | Description |
 |---|---|
-| `/vrising start [hours]` | Start the server; arms auto-shutdown timer (default: `DEFAULT_SHUTDOWN_HOURS`) |
-| `/vrising stop [force]` | Stop the server and cancel the timer; aborts if players are online unless `force` is passed |
-| `/vrising status` | Show server state and time remaining until auto-shutdown |
+| `/<game> start [hours]` | Start the server; arms auto-shutdown timer (default: `DEFAULT_SHUTDOWN_HOURS`) |
+| `/<game> stop [force]` | Stop the server and cancel the timer; aborts if players are online unless `force` is passed |
+| `/<game> status` | Show server state, player count, and time remaining until auto-shutdown |
 
-If the server is already running when `/vrising start` is called, the timer is rescheduled
-without restarting the container. On bot restart, if the server is found running, a default
-timer is armed automatically.
+If the server is already running when `start` is called, the timer is rescheduled
+without restarting the container. On bot restart, any game server found running gets a default
+timer armed automatically. When the timer fires with players still online, shutdown is
+postponed 1h at a time.
+
+## Games
+
+The shared start/stop/status and auto-shutdown logic lives in `bot/cogs/game_server.py`
+(`GameServerCog`). Each game is a small subclass that supplies its container name and how to
+count players / announce in-game:
+
+| Game | Player count | Announce | Before stop |
+|---|---|---|---|
+| V Rising (`cogs/vrising.py`) | metrics API (`vr_users_connected`) | RCON `announce` | -- |
+| Factorio (`cogs/factorio.py`) | RCON `/players online` | RCON chat message | RCON `/server-save`, then waits 10s |
+
+Factorio note: never send Lua commands (`/c`, `/silent-command`) over RCON -- they permanently
+disable achievements for the save.
+
+To add a game: subclass `GameServerCog`, add its env vars to `config.py`, and add its
+extension to `GAME_EXTENSIONS`.
 
 ## Environment Variables
 
@@ -30,11 +50,16 @@ Copy `.env.example` to `.env` and fill in:
 ```
 DISCORD_BOT_TOKEN=        # bot token from Discord developer portal
 DISCORD_GUILD_ID=         # your server's ID
-TARGET_CONTAINER_NAME=    # exact Docker container name of the vRising server
 NOTIFICATION_CHANNEL_ID=  # channel where auto-shutdown notices are posted
 DEFAULT_SHUTDOWN_HOURS=6  # default timer duration
 MAX_SHUTDOWN_HOURS=24     # upper bound for user-supplied duration
+
+VRISING_CONTAINER_NAME=   # exact Docker container name; blank disables /vrising
+FACTORIO_CONTAINER_NAME=  # exact Docker container name; blank disables /factorio
 ```
+
+Plus optional per-game metrics/RCON settings (`VRISING_METRICS_URL`, `VRISING_RCON_*`,
+`FACTORIO_RCON_*`) -- see `.env.example`.
 
 ## Deployment (Synology NAS)
 
@@ -47,12 +72,25 @@ cp .env.example .env
 nano .env
 docker compose up -d --build
 
-# Register slash commands (once, or after command signatures change)
+# Register slash commands
 docker exec linkbot-discord-bot-1 python sync_commands.py
 
 # Updates
 git pull && docker compose up -d --build
 ```
+
+### Syncing slash commands
+
+`sync_commands.py` runs inside the already-running bot container, so it uses that
+container's code and `.env`. Always rebuild/recreate first (`docker compose up -d --build`),
+then sync -- otherwise it registers the old command set.
+
+Re-run the sync when:
+- a game is enabled or disabled (its `<GAME>_CONTAINER_NAME` set or cleared in `.env`)
+- a command's name, options, or description changes
+
+Changes to command behavior only need the rebuild. A successful sync prints each registered
+group, e.g. `/vrising` and `/factorio`.
 
 ## Useful Compose Commands
 
@@ -78,7 +116,7 @@ A test container (fake vRising target) is available via the `test` profile:
 docker compose --profile test up -d
 ```
 
-Set `TARGET_CONTAINER_NAME` in `.env` to match `container_name` in the `test-server` service.
+Set `VRISING_CONTAINER_NAME` in `.env` to match `container_name` in the `test-server` service.
 
 ### Verify proxy security
 

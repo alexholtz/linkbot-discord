@@ -1,225 +1,42 @@
 import asyncio
 import logging
 import urllib.request
-from datetime import datetime, timezone, timedelta
-from typing import Literal
 
 import discord
-from discord import app_commands
 from discord.ext import commands
-from aiomcrcon import Client as RconClient
 
 import config
-import docker_client
-import docker.errors
+import rcon
+from cogs.game_server import GameServerCog
 
 log = logging.getLogger(__name__)
 
 
-class VRising(commands.GroupCog, name="vrising"):
-    def __init__(self, bot: commands.Bot) -> None:
-        self.bot = bot
-        self._shutdown_task: asyncio.Task | None = None
-        self._shutdown_at: datetime | None = None
-        super().__init__()
+class VRising(GameServerCog, name="vrising", description="V Rising server controls"):
+    display_name = "V Rising"
+    container_name = config.VRISING_CONTAINER_NAME
 
-    def _wrong_guild(self, interaction: discord.Interaction) -> bool:
-        return interaction.guild_id != config.DISCORD_GUILD_ID
+    @property
+    def player_count_enabled(self) -> bool:
+        return bool(config.VRISING_METRICS_URL)
 
-    @app_commands.command(name="start", description="Start the V Rising server")
-    @app_commands.describe(hours="Hours until auto-shutdown (default from config)")
-    async def start(
-        self, interaction: discord.Interaction, hours: int | None = None
-    ) -> None:
-        if self._wrong_guild(interaction):
+    async def get_player_count(self) -> int | None:
+        return await asyncio.to_thread(self._fetch_users_connected)
+
+    async def announce(self, message: str) -> None:
+        if not (config.VRISING_RCON_HOST and config.VRISING_RCON_PASSWORD):
             return
-
-        hours = hours if hours is not None else config.DEFAULT_SHUTDOWN_HOURS
-
-        if not (1 <= hours <= config.MAX_SHUTDOWN_HOURS):
-            await interaction.response.send_message(
-                f"Hours must be between 1 and {config.MAX_SHUTDOWN_HOURS}.",
-                ephemeral=True,
+        try:
+            await rcon.send_command(
+                config.VRISING_RCON_HOST,
+                config.VRISING_RCON_PORT,
+                config.VRISING_RCON_PASSWORD,
+                f"announce {message}",
             )
-            return
-
-        await interaction.response.defer()
-
-        try:
-            status = await asyncio.to_thread(docker_client.container_status)
         except Exception as e:
-            await interaction.followup.send(f"Could not reach Docker proxy: {e}")
-            return
+            log.warning("RCON announce failed: %s", e)
 
-        already_running = status == "running"
-
-        if not already_running:
-            try:
-                await asyncio.to_thread(docker_client.start_container)
-            except Exception as e:
-                await interaction.followup.send(f"Failed to start server: {e}")
-                return
-
-        self._reschedule(hours)
-
-        shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-        if already_running:
-            msg = f"Fetch was already going -- reset the timer to **{hours}h** (at {shutdown_ts})."
-        else:
-            msg = f"Let's play fetch! Server starting up. Auto-shutdown in **{hours}h** (at {shutdown_ts})."
-
-        await interaction.followup.send(msg)
-
-    @app_commands.command(name="stop", description="Stop the V Rising server")
-    @app_commands.describe(force="Pass 'force' to stop even if players are online")
-    async def stop(
-        self, interaction: discord.Interaction, force: Literal["force"] | None = None
-    ) -> None:
-        if self._wrong_guild(interaction):
-            return
-
-        await interaction.response.defer()
-
-        if force != "force" and config.VRISING_METRICS_URL:
-            connected = await asyncio.to_thread(self._get_connected_users)
-            if connected is not None and connected > 0:
-                await interaction.followup.send(
-                    f"Can't stop -- **{connected}** player(s) are online. "
-                    "Use `/vrising stop force:force` to stop anyway."
-                )
-                return
-
-        self._cancel_shutdown()
-
-        try:
-            await asyncio.to_thread(docker_client.stop_container)
-            await interaction.followup.send("Playtime is over. Server stopped.")
-        except Exception as e:
-            await interaction.followup.send(f"Failed to stop server: {e}")
-
-    @app_commands.command(name="status", description="Check the V Rising server status")
-    async def status(self, interaction: discord.Interaction) -> None:
-        if self._wrong_guild(interaction):
-            return
-
-        try:
-            status = await asyncio.to_thread(docker_client.container_status)
-        except Exception as e:
-            await interaction.response.send_message(
-                f"Could not reach Docker proxy: {e}", ephemeral=True
-            )
-            return
-
-        if status == "running":
-            connected = await asyncio.to_thread(self._get_connected_users)
-            player_str = f" | **{connected}** player(s) online" if connected is not None else ""
-
-            if self._shutdown_at:
-                remaining = self._shutdown_at - datetime.now(timezone.utc)
-                total_secs = max(int(remaining.total_seconds()), 0)
-                h, rem = divmod(total_secs, 3600)
-                m = rem // 60
-                shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-                msg = f"Server is **running**{player_str}. Auto-shutdown in {h}h {m}m (at {shutdown_ts})."
-            else:
-                msg = f"Server is **running**{player_str}. No auto-shutdown scheduled."
-        else:
-            msg = "Server is **offline**."
-
-        await interaction.response.send_message(msg)
-
-    async def check_startup_state(self) -> None:
-        """Called from on_ready: if the container is already running, arm a default timer."""
-        status = await asyncio.to_thread(docker_client.container_status)
-        if status != "running":
-            return
-
-        hours = config.DEFAULT_SHUTDOWN_HOURS
-        log.warning(
-            "V Rising container found running at startup -- scheduling %dh auto-shutdown", hours
-        )
-        self._reschedule(hours)
-
-        channel = await self._notification_channel()
-        if channel:
-            shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-            await channel.send(
-                f"Woke up from a nap (restarted) -- V Rising was already running! "
-                f"Auto-shutdown in **{hours}h** (at {shutdown_ts})."
-            )
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _reschedule(self, hours: int) -> None:
-        self._cancel_shutdown()
-        self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=hours)
-        self._shutdown_task = asyncio.create_task(self._auto_shutdown(hours))
-
-    def _cancel_shutdown(self) -> None:
-        if self._shutdown_task and not self._shutdown_task.done():
-            self._shutdown_task.cancel()
-        self._shutdown_task = None
-        self._shutdown_at = None
-
-    async def _auto_shutdown(self, hours: int) -> None:
-        try:
-            while True:
-                await asyncio.sleep(hours * 3600)
-
-                if not config.VRISING_METRICS_URL:
-                    break  # metrics not configured -- shut down as scheduled
-
-                connected = await asyncio.to_thread(self._get_connected_users)
-
-                if connected is None:
-                    # Metrics reachable but fetch failed -- extend to avoid surprise shutdown
-                    log.warning("Metrics unavailable at shutdown check -- extending 1h")
-                    hours = 1
-                    self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
-                    await self._rcon_announce(
-                        "Server auto-shutdown postponed -- couldn't verify player count. Checking again in 1h."
-                    )
-                    channel = await self._notification_channel()
-                    if channel:
-                        shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-                        await channel.send(
-                            f"⚠️ Couldn't reach server metrics at shutdown time -- extended **1h** to be safe (next check at {shutdown_ts})."
-                        )
-                elif connected > 0:
-                    log.info("Auto-shutdown check: %d player(s) online -- extending 1h", connected)
-                    hours = 1
-                    self._shutdown_at = datetime.now(timezone.utc) + timedelta(hours=1)
-                    await self._rcon_announce(
-                        f"Server auto-shutdown postponed -- {connected} player(s) still online. Checking again in 1h."
-                    )
-                    channel = await self._notification_channel()
-                    if channel:
-                        shutdown_ts = discord.utils.format_dt(self._shutdown_at, style="t")
-                        await channel.send(
-                            f"**{connected}** player(s) still online at shutdown time -- extended **1h** (next check at {shutdown_ts})."
-                        )
-                else:
-                    break  # 0 players -- proceed to shutdown
-
-        except asyncio.CancelledError:
-            return
-
-        log.info("Auto-shutdown timer fired -- stopping V Rising container")
-        try:
-            await asyncio.to_thread(docker_client.stop_container)
-        except Exception as e:
-            log.error("Auto-shutdown failed to stop container: %s", e)
-
-        self._shutdown_task = None
-        self._shutdown_at = None
-
-        channel = await self._notification_channel()
-        if channel:
-            await channel.send("I'm tired (auto-shutdown) -- server stopped.")
-
-    def _get_connected_users(self) -> int | None:
+    def _fetch_users_connected(self) -> int | None:
         """Fetch vr_users_connected from the metrics API. Returns None on failure."""
         try:
             with urllib.request.urlopen(config.VRISING_METRICS_URL, timeout=5) as resp:
@@ -230,29 +47,6 @@ class VRising(commands.GroupCog, name="vrising"):
         except Exception as e:
             log.warning("Failed to fetch metrics: %s", e)
         return None
-
-    async def _rcon_announce(self, message: str) -> None:
-        """Send an RCON announce to all connected players. Logs and swallows errors."""
-        if not (config.RCON_HOST and config.RCON_PASSWORD):
-            return
-        try:
-            async with RconClient(config.RCON_HOST, config.RCON_PORT, config.RCON_PASSWORD) as rcon:
-                await rcon.send_cmd(f"announce {message}")
-        except Exception as e:
-            log.warning("RCON announce failed: %s", e)
-
-    async def _notification_channel(
-        self,
-    ) -> discord.TextChannel | None:
-        channel = self.bot.get_channel(config.NOTIFICATION_CHANNEL_ID)
-        if channel is None:
-            try:
-                channel = await self.bot.fetch_channel(config.NOTIFICATION_CHANNEL_ID)
-            except discord.errors.NotFound:
-                log.error(
-                    "Notification channel %d not found", config.NOTIFICATION_CHANNEL_ID
-                )
-        return channel
 
 
 async def setup(bot: commands.Bot) -> None:

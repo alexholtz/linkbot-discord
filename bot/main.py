@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from cogs.game_server import GameServerCog
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,9 +47,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready() -> None:
     log.info("Logged in as %s (ID: %s)", bot.user, bot.user.id)
-    vrising_cog = bot.cogs.get("vrising")
-    if vrising_cog:
-        await vrising_cog.check_startup_state()
+    for cog in bot.cogs.values():
+        if isinstance(cog, GameServerCog):
+            try:
+                await cog.check_startup_state()
+            except Exception:
+                log.exception("Startup state check failed for %s", cog.display_name)
 
 
 @bot.tree.error
@@ -78,7 +82,8 @@ async def on_app_command_error(
 
 async def main() -> None:
     async with bot:
-        await bot.load_extension("cogs.vrising")
+        for ext in config.GAME_EXTENSIONS:
+            await bot.load_extension(ext)
         await bot.start(config.DISCORD_BOT_TOKEN)
 
 
