@@ -63,20 +63,26 @@ Plus optional per-game metrics/RCON settings (`VRISING_METRICS_URL`, `VRISING_RC
 
 ## Deployment (Synology NAS)
 
+On DSM, only root can talk to the Docker socket, so every `docker` / `docker compose`
+command in this README must run as root. Without it you'll get
+`permission denied while trying to connect to the Docker daemon socket`. Prefix docker
+commands with `sudo` (or use a root shell via `sudo su`). Keep `git` commands as your normal
+user -- as root, git refuses to touch a repo owned by another user ("dubious ownership").
+
 ```bash
 # One-time setup
 ssh you@nas
-git clone <repo-url> ~/docker/linkbot-discord
-cd ~/docker/linkbot-discord
+git clone <repo-url> /volume1/docker/linkbot-discord
+cd /volume1/docker/linkbot-discord
 cp .env.example .env
 nano .env
-docker compose up -d --build
+sudo docker compose up -d --build
 
 # Register slash commands
-docker exec linkbot-discord-bot-1 python sync_commands.py
+sudo docker exec linkbot-discord-bot-1 python sync_commands.py
 
 # Updates
-git pull && docker compose up -d --build
+git pull && sudo docker compose up -d --build
 ```
 
 ### Syncing slash commands
