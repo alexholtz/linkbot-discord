@@ -92,6 +92,14 @@ Re-run the sync when:
 Changes to command behavior only need the rebuild. A successful sync prints each registered
 group, e.g. `/vrising` and `/factorio`.
 
+## Troubleshooting
+
+If `.env` is missing a required value, has a non-numeric value where a number is expected,
+or Discord rejects the token, the bot logs the error once and halts instead of crash-looping.
+The container stays up but shows as **unhealthy** in `docker ps` / Container Manager.
+Check `docker compose logs bot`, fix `.env`, then `docker compose up -d` (a plain
+`restart` won't pick up `.env` changes).
+
 ## Useful Compose Commands
 
 ```bash

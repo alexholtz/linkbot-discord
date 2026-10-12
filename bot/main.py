@@ -1,19 +1,44 @@
 import asyncio
 import logging
+import signal
+import sys
+from pathlib import Path
 
 import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-import config
-from cogs.game_server import GameServerCog
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 log = logging.getLogger(__name__)
+
+# Checked by the compose healthcheck so a halted bot shows as "unhealthy".
+CONFIG_ERROR_MARKER = Path("/tmp/config-error")
+
+
+def halt_on_config_error(reason: str) -> None:
+    """Log a configuration error once, then idle until the container is stopped.
+
+    Exiting would make Docker's restart policy relaunch the bot in a loop, and a
+    restart can't fix it: .env is only read when the container is (re)created.
+    """
+    log.error("%s", reason)
+    log.error("Bot halted. Fix .env, then recreate the container: docker compose up -d")
+    CONFIG_ERROR_MARKER.write_text(reason)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    while True:
+        signal.pause()
+
+
+# config validates .env at import time and raises RuntimeError on missing/invalid values.
+try:
+    import config
+    from cogs.game_server import GameServerCog
+except RuntimeError as e:
+    halt_on_config_error(f"Configuration error: {e}")
 
 
 class QuietReconnectFilter(logging.Filter):
@@ -88,4 +113,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except discord.LoginFailure as e:
+        halt_on_config_error(f"Discord rejected DISCORD_BOT_TOKEN: {e}")
