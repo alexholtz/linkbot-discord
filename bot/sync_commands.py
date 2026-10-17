@@ -15,7 +15,8 @@ async def main() -> None:
     intents = discord.Intents.none()
     bot = commands.Bot(command_prefix="!", intents=intents)
 
-    await bot.load_extension("cogs.vrising")
+    for ext in config.GAME_EXTENSIONS:
+        await bot.load_extension(ext)
     await bot.login(config.DISCORD_BOT_TOKEN)
 
     guild = discord.Object(id=config.DISCORD_GUILD_ID)

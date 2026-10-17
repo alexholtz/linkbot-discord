@@ -12,23 +12,23 @@ def _get_client() -> docker.DockerClient:
     return _client
 
 
-def get_container() -> docker.models.containers.Container:
-    return _get_client().containers.get(config.TARGET_CONTAINER_NAME)
+def get_container(name: str) -> docker.models.containers.Container:
+    return _get_client().containers.get(name)
 
 
-def start_container() -> None:
-    get_container().start()
+def start_container(name: str) -> None:
+    get_container(name).start()
 
 
-def stop_container() -> None:
+def stop_container(name: str) -> None:
     try:
-        get_container().stop()
+        get_container(name).stop()
     except docker.errors.NotFound:
         pass
 
 
-def container_status() -> str:
+def container_status(name: str) -> str:
     try:
-        return get_container().status
+        return get_container(name).status
     except docker.errors.NotFound:
         return "not found"

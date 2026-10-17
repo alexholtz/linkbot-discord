@@ -18,6 +18,11 @@ services:
     networks: [bot-internal]
     depends_on: [docker-proxy]
     restart: unless-stopped
+    # On a bad .env the bot halts (instead of crash-looping) and writes this marker.
+    healthcheck:
+      test: ["CMD", "test", "!", "-f", "/tmp/config-error"]
+      interval: 30s
+      start_period: 10s
 
   test-server:
     image: alpine

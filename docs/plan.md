@@ -225,6 +225,12 @@ docker compose run --rm bot python sync_commands.py
 
 ## Multi-Server Support (future)
 
+> **Superseded.** Multi-game support landed as a `GameServerCog` base class with one small
+> subclass per game (`cogs/vrising.py`, `cogs/factorio.py`), enabled per game via
+> `<GAME>_CONTAINER_NAME` env vars -- see the README. Games differ in how player count,
+> announcements and pre-stop saves work, so a config-only `servers.yml` couldn't express them.
+> The notes below are kept for history.
+
 Support multiple game server containers, each mapped to its own slash command group
 (e.g. `/vrising`, `/satisfactory`), driven by a config file rather than hardcoded class
 definitions.
